@@ -15,7 +15,7 @@
 
 #include "rlib.h"
 
-
+//main is in rlib.c line 904
 
 struct reliable_state {
   rel_t *next;			/* Linked list for traversing all connections */
@@ -29,21 +29,18 @@ struct reliable_state {
 rel_t *rel_list;
 
 
-
-
-
 /* Creates a new reliable protocol session, returns NULL on failure.
  * Exactly one of c and ss should be NULL.  (ss is NULL when called
  * from rlib.c, while c is NULL when this function is called from
  * rel_demux.) */
-rel_t *
-rel_create (conn_t *c, const struct sockaddr_storage *ss,
+rel_t *                                                         //rel_create will return a pointer to a rel_t object
+rel_create (conn_t *c, const struct sockaddr_storage *ss,       
 	    const struct config_common *cc)
 {
-  rel_t *r;
+  rel_t *r;                                                     //r points to an object of type rel_t
 
-  r = xmalloc (sizeof (*r));
-  memset (r, 0, sizeof (*r));
+  r = xmalloc (sizeof (*r));                                    //gives r memory that is the size of the object r points to
+  memset (r, 0, sizeof (*r));                                   //initializes the value of the memory space starting at r to 0
 
   if (!c) {
     c = conn_create (r, ss);
