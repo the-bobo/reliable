@@ -23,6 +23,8 @@ struct reliable_state {
 
   conn_t *c;			/* This is the connection object */
   int window_size = 2 * c.window;                             //permits SWS = RWS
+  int last_ackno_received = 1;
+  int last_seqno_sent = 1;
 
   /* Add your own data fields below this */
 
@@ -100,9 +102,12 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                 //size_t n is th
   /* logic to evaluate checksum; if checskum matches, continue,
   else do not send ACK and reject packet */
 
+  /* if packet size == 8, ACK received, ACK logic */
+  /* if this_rcvd.ackno < last_sent.seqno, resend packet for which its seqno == this_rcvd.ackno */
+ 
   /* if packet size == 12, EOF condition reached, EOF logic + send EOF pkt to other side (conn_output w/ length 0) */
 
-  /* if packet size == 8, ACK received, ACK logic */
+  
 
   /* if packet size > 12, DATA received: First, check seqno.
   If dupe, send DUPACK[seqno] for correct value of seqno (cumulative ACK).
@@ -113,7 +118,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                 //size_t n is th
 
 
 void
-rel_read (rel_t *s)
+rel_read (rel_t *s)                                             //this is actually rel_send
 {
   /* while conn_input > 0, drain it */
   /* ensure that the amount you're draining from conn_input is !> reliable_state.window_size) */
@@ -121,7 +126,7 @@ rel_read (rel_t *s)
 }
 
 void
-rel_output (rel_t *r)
+rel_output (rel_t *r)                                           //prints data of received UDP packets to screen
 {
   /* call conn_output, make sure you're not trying to call conn_output for more than the value conn_bufspace returns */
 }
