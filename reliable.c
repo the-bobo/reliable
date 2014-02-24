@@ -22,6 +22,7 @@ struct reliable_state {
   rel_t **prev;
 
   conn_t *c;			/* This is the connection object */
+  int window_size = 2 * c.window;                             //permits SWS = RWS
 
   /* Add your own data fields below this */
 
@@ -42,7 +43,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
   r = xmalloc (sizeof (*r));                                    //gives r memory that is the size of the object r points to
   memset (r, 0, sizeof (*r));                                   //initializes the value of the memory space starting at r to 0
 
-  if (!c) {
+  if (!c) {                                                     //if our connection object "c" does not exist, create it
     c = conn_create (r, ss);
     if (!c) {
       free (r);
@@ -91,24 +92,44 @@ rel_demux (const struct config_common *cc,
 }
 
 void
-rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
+rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                 //size_t n is the size of packet length in bytes
 {
+  /* logic to evaluate conn_bufspace, which gives buffer available to conn_output.
+  if conn_bufspace is full, reject packet and do not send ACK */
+
+  /* logic to evaluate checksum; if checskum matches, continue,
+  else do not send ACK and reject packet */
+
+  /* if packet size == 12, EOF condition reached, EOF logic + send EOF pkt to other side (conn_output w/ length 0) */
+
+  /* if packet size == 8, ACK received, ACK logic */
+
+  /* if packet size > 12, DATA received: First, check seqno.
+  If dupe, send DUPACK[seqno] for correct value of seqno (cumulative ACK).
+  If not dupe, check to see if in order. If in order, pass to rel_read and send
+  ACK. If out of order, buffer and send DUPACK[seqno] for cumulative ACK, as well
+  as ACK for individual packet. */
 }
 
 
 void
 rel_read (rel_t *s)
 {
+  /* while conn_input > 0, drain it */
+  /* ensure that the amount you're draining from conn_input is !> reliable_state.window_size) */
+  /* ***when an EOF is rcvd, conn_input returns -1 -- is it already checking cksum and len? */
 }
 
 void
 rel_output (rel_t *r)
 {
+  /* call conn_output, make sure you're not trying to call conn_output for more than the value conn_bufspace returns */
 }
 
 void
 rel_timer ()
 {
   /* Retransmit any packets that need to be retransmitted */
-
+  /* Should keep track of received ACKs and outstanding ACKs, retransmit
+  as needed, and throttle send rate to match available window space */
 }
