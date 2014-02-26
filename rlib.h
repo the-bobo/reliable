@@ -71,6 +71,10 @@ struct ack_packet {
   uint32_t ackno;
 };
 
+/* Suggested initializer function for making ack_packets by Hongzhe
+ack_packet * 
+ack_packet_init(); */
+
 struct packet {
   uint16_t cksum;
   uint16_t len;

@@ -22,15 +22,15 @@ struct reliable_state {
   rel_t **prev;
 
   conn_t *c;			/* This is the connection object */
-  int window_size; //= c->window;                             //permits SWS = RWS
-  int my_ackno; //= 1;
-  int last_seqno_sent; //= 1; 
+  int window_size; 
+  int my_ackno; 
+  int last_seqno_sent;
+  packet_t * lastPacketTouched;                                 //is the last packet eitehr sent or received 
 
   /* Add your own data fields below this */
 
 };
 rel_t *rel_list;
-
 
 /* Creates a new reliable protocol session, returns NULL on failure.
  * Exactly one of c and ss should be NULL.  (ss is NULL when called
@@ -44,6 +44,10 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 
   r = xmalloc (sizeof (*r));                                    //gives r memory that is the size of the object r points to
   memset (r, 0, sizeof (*r));                                   //initializes the value of the memory space starting at r to 0
+
+  r->window_size = cc->window;      
+  r->my_ackno = 1;
+  r->last_seqno_sent = 0;
 
   if (!c) {                                                     //if our connection object "c" does not exist, create it
     c = conn_create (r, ss);
@@ -97,37 +101,40 @@ void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                 //size_t n is the size of packet length in bytes
 {
   /* Packet size check vs. available buffer */
-  if (n > r->c->conn_bufspace)                                  //r is an instance of rel_t, c is a instance of conn_t
+  if (n > conn_bufspace(r->c))                                  //r is an instance of rel_t, c is a instance of conn_t
   {
     return;                                                     //drops packet, does not send ack
   }
 
-  if (n <= c->conn_bufspace)
+  if (n <= conn_bufspace(r->c))
   {
     /* Check cksum */
     if (cksum(pkt, 0) != pkt->cksum)
     {
-      return;                                                   //drops packet, does not send ack
+      return;                                                         //drops packet, does not send ack
     }
     else if (cksum(pkt, 0) == pkt->cksum)
     {
       if (n > 12)
       {
-        if (pkt->seqno == c->my_ackno)
+        if (pkt->seqno == r->my_ackno)
         {
-          c->my_ackno++;
+          r->my_ackno++;
           /* Construct ACK packet */
-          ack_packet ack_pkt.ackno = c->my_ackno;
-          ack_pkt->len = 8;
-          ack_pkt->cksum = cksum(ack_pkt, 8);
-          conn_sendpkt (c, ack_pkt, ack_pkt->len);            //send ACK packet with my_ackno
+          packet_t *ackPacket = malloc(sizeof (struct packet));       //uses a "packet_t" type defined in rlib.c line 446
+          ackPacket->len = 8;
+          ackPacket->ackno = r->my_ackno;
+          ackPacket->cksum = cksum(ackPacket, 8);
+          conn_sendpkt (r->c, ackPacket, ackPacket->len);            //send ACK packet with my_ackno
 
-          rel_output (???)  //don't i need to pass the packet to rel_output?
           /* Pass to rel_output */
+          r->lastPacketTouched = pkt;
+          rel_output (r);
+          
         }
-        else if (pkt->seqno < c->my_ackno)
-          return;                                               //drops packet, does not send ack
-        else if (pkt->seqno > c->my_ackno)
+        else if (pkt->seqno < r->my_ackno)
+          return;                                                   //drops packet, does not send ack
+        else if (pkt->seqno > r->my_ackno)
         {
           /* add packet to buffer */
         }
@@ -135,6 +142,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                 //size_t n is th
     }
 
   }
+
+  /* - must use an initializer function to return a pointer to a newly constructed ack_packet */
 
   /* X - logic to evaluate conn_bufspace, which gives buffer available to conn_output.
   if conn_bufspace is full, reject packet and do not send ACK */
@@ -157,8 +166,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                 //size_t n is th
 
 
 void
-rel_read (rel_t *s)
+rel_read (rel_t *s)                                                                   //this is actually rel_send
 {
+  /* make sure when you send a data packet it still sets the ACKNO field to my_ackno on it -- Hongze */
   /* while conn_input > 0, drain it */
   /* ensure that the amount you're draining from conn_input is !> reliable_state.window_size) */
   /* ***when an EOF is rcvd, conn_input returns -1 -- is it already checking cksum and len? */
@@ -167,6 +177,7 @@ rel_read (rel_t *s)
 void
 rel_output (rel_t *r)
 {
+  /* your data is in r->lastPacketTouched */
   /* call conn_output, make sure you're not trying to call conn_output for more than the value conn_bufspace returns */
 }
 
