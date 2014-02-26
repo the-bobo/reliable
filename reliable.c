@@ -98,22 +98,27 @@ rel_demux (const struct config_common *cc,
 }
 
 void
-rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                 //size_t n is the size of packet length in bytes
+rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n is the size of packet length in bytes
 {
+  
   /* Packet size check vs. available buffer */
-  if (n > conn_bufspace(r->c))                                  //r is an instance of rel_t, c is a instance of conn_t
+  //this is incorrect -- check vs window size of recevier, not buffer size - just to make sure packet number (seqno) falls 
+  //within receiver window; if evaluation should evaluate if pkt->seqno is_outside_of receiver_window then drop.
+  if (n > conn_bufspace(r->c))                                        //r is an instance of rel_t, c is a instance of conn_t
   {
-    return;                                                     //drops packet, does not send ack
+    return;                                                           //drops packet, does not send ack
   }
 
   if (n <= conn_bufspace(r->c))
   {
     /* Check cksum */
-    if (cksum(pkt, 0) != pkt->cksum)
+    int to_be_compared_cksum = pkt->cksum;
+    pkt->cksum = 0;
+    if (cksum(pkt, n) != to_be_compared_cksum)
     {
       return;                                                         //drops packet, does not send ack
     }
-    else if (cksum(pkt, 0) == pkt->cksum)
+    else if (cksum(pkt, n) == to_be_compared_cksum)
     {
       if (n > 12)
       {
@@ -125,7 +130,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                 //size_t n is th
           ackPacket->len = 8;
           ackPacket->ackno = r->my_ackno;
           ackPacket->cksum = cksum(ackPacket, 8);
-          conn_sendpkt (r->c, ackPacket, ackPacket->len);            //send ACK packet with my_ackno
+          conn_sendpkt (r->c, ackPacket, ackPacket->len);             //send ACK packet with my_ackno
 
           /* Pass to rel_output */
           r->lastPacketTouched = pkt;
@@ -133,7 +138,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                 //size_t n is th
           
         }
         else if (pkt->seqno < r->my_ackno)
-          return;                                                   //drops packet, does not send ack
+          return;                                                     //drops packet, does not send ack
         else if (pkt->seqno > r->my_ackno)
         {
           /* add packet to buffer */
