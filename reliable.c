@@ -146,14 +146,6 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
       }
     }
 
-<<<<<<< HEAD
-  /* if packet size == 8, ACK received, ACK logic */
-  /* if this_rcvd.ackno < last_sent.seqno, resend packet for which its seqno == this_rcvd.ackno */
- 
-  /* if packet size == 12, EOF condition reached, EOF logic + send EOF pkt to other side (conn_output w/ length 0) */
-
-  
-=======
   }
 
   /* - must use an initializer function to return a pointer to a newly constructed ack_packet */
@@ -163,7 +155,6 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
 
   /* X - logic to evaluate checksum; if checskum matches, continue,
   else do not send ACK and reject packet */
->>>>>>> bobo
 
   /* if packet size > 12, DATA received: First, check seqno.
   If dupe, send DUPACK[seqno] for correct value of seqno (cumulative ACK).
@@ -180,11 +171,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
 
 
 void
-<<<<<<< HEAD
-rel_read (rel_t *s)                                             //this is actually rel_send
-=======
 rel_read (rel_t *s)                                                                   //this is actually rel_send
->>>>>>> bobo
 {
   /* make sure when you send a data packet it still sets the ACKNO field to my_ackno on it -- Hongze */
   /* while conn_input > 0, drain it */
@@ -193,7 +180,7 @@ rel_read (rel_t *s)                                                             
 }
 
 void
-rel_output (rel_t *r)                                           //prints data of received UDP packets to screen
+rel_output (rel_t *r)
 {
   /* your data is in r->lastPacketTouched */
   /* call conn_output, make sure you're not trying to call conn_output for more than the value conn_bufspace returns */
