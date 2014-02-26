@@ -160,7 +160,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
           /* add packet to buffer */
           if((pkt->seqno - r->my_ackno) < r->window_size)
           {
-            r->window_buffer[pkt->seqno - r->seqno - 1] = *pkt;       //QUESTION - correct? stores packet in window buffer, in order
+            r->window_buffer[pkt->seqno - r->my_ackno - 1] = *pkt;       //QUESTION - correct? stores packet in window buffer, in order
+                                                                      //assumes array index values start at 0
             /* send DUPACK */
             packet_t *ackPacket = malloc(sizeof (struct packet));     //uses a "packet_t" type defined in rlib.c line 446
             ackPacket->len = 8;
@@ -181,7 +182,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
   /* X - logic to evaluate checksum; if checskum matches, continue,
   else do not send ACK and reject packet */
 
-  /* if packet size > 12, DATA received: First, check seqno.
+  /* X - if packet size > 12, DATA received: First, check seqno.
   If dupe, send DUPACK[seqno] for correct value of seqno (cumulative ACK).
   If not dupe, check to see if in order. If in order, pass to rel_output and send
   ACK. If out of order, buffer and send DUPACK[seqno] for cumulative ACK. */
