@@ -25,7 +25,7 @@ struct reliable_state {
   int window_size; 
   int my_ackno; 
   int last_seqno_sent;
-  packet_t * lastPacketTouched;                                 //is the last packet eitehr sent or received 
+  packet_t * lastPacketTouched;                                 //is the last packet either sent or received 
 
   /* Add your own data fields below this */
 
@@ -102,8 +102,20 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
 {
   
   /* Packet size check vs. available buffer */
-  //this is incorrect -- check vs window size of recevier, not buffer size - just to make sure packet number (seqno) falls 
-  //within receiver window; if evaluation should evaluate if pkt->seqno is_outside_of receiver_window then drop.
+  //if pkt->seqno is outside of receiver window then drop.
+  
+  if (pkt->seqno < r->my_ackno)
+  {
+    return;                                                           //drops packet, does not send ack
+  }
+
+  int upper_window = r->my_ackno + r->window_size;
+  if (pkt->seqno > upper_window)
+  {
+    return;                                                          //drops packet, does not send ack
+  }
+
+
   if (n > conn_bufspace(r->c))                                        //r is an instance of rel_t, c is a instance of conn_t
   {
     return;                                                           //drops packet, does not send ack
