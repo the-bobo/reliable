@@ -22,7 +22,9 @@ struct reliable_state {
   rel_t **prev;
 
   conn_t *c;			/* This is the connection object */
-  int window_size = 2 * c.window;                             //permits SWS = RWS
+  int window_size = c->window;                             //permits SWS = RWS
+  int my_ackno = 1;
+  int last_seqno_sent = 1;
 
   /* Add your own data fields below this */
 
@@ -94,21 +96,63 @@ rel_demux (const struct config_common *cc,
 void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                 //size_t n is the size of packet length in bytes
 {
-  /* logic to evaluate conn_bufspace, which gives buffer available to conn_output.
+  /* Packet size check vs. available buffer */
+  if (n > c->conn_bufspace)
+  {
+    return;                                                     //drops packet, does not send ack
+  }
+
+  if (n <= c->conn_bufspace)
+  {
+    /* Check cksum */
+    if (cksum(pkt, 0) != pkt->cksum)
+    {
+      return;                                                   //drops packet, does not send ack
+    }
+    else if (cksum(pkt, 0) == pkt->cksum)
+    {
+      if (n > 12)
+      {
+        if (pkt->seqno == c->my_ackno)
+        {
+          c->my_ackno++;
+          /* Construct ACK packet */
+          ack_packet ack_pkt.ackno = c->my_ackno;
+          ack_pkt->len = 8;
+          ack_pkt->cksum = cksum(ack_pkt, 8);
+          conn_sendpkt (c, ack_pkt, ack_pkt->len);            //send ACK packet with my_ackno
+
+          rel_output (???)  //don't i need to pass the packet to rel_output?
+          /* Pass to rel_output */
+        }
+        else if (pkt->seqno < c->my_ackno)
+          return;                                               //drops packet, does not send ack
+        else if (pkt->seqno > c->my_ackno)
+        {
+          /* add packet to buffer */
+        }
+      }
+    }
+
+  }
+
+  /* X - logic to evaluate conn_bufspace, which gives buffer available to conn_output.
   if conn_bufspace is full, reject packet and do not send ACK */
 
-  /* logic to evaluate checksum; if checskum matches, continue,
+  /* X - logic to evaluate checksum; if checskum matches, continue,
   else do not send ACK and reject packet */
-
-  /* if packet size == 12, EOF condition reached, EOF logic + send EOF pkt to other side (conn_output w/ length 0) */
-
-  /* if packet size == 8, ACK received, ACK logic */
 
   /* if packet size > 12, DATA received: First, check seqno.
   If dupe, send DUPACK[seqno] for correct value of seqno (cumulative ACK).
-  If not dupe, check to see if in order. If in order, pass to rel_read and send
+  If not dupe, check to see if in order. If in order, pass to rel_output and send
   ACK. If out of order, buffer and send DUPACK[seqno] for cumulative ACK, as well
   as ACK for individual packet. */
+
+  /* if packet size == 8, ACK received, ACK logic */
+    /* if this_rcvd.ackno < last_sent.seqno, resend packet for which its seqno == this_rcvd.ackno */
+ 
+  /* if packet size == 12, EOF condition reached, EOF logic + send EOF pkt to other side (conn_output w/ length 0) */
+ 
 }
 
 
