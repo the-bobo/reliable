@@ -22,9 +22,9 @@ struct reliable_state {
   rel_t **prev;
 
   conn_t *c;			/* This is the connection object */
-  int window_size = c->window;                             //permits SWS = RWS
-  int my_ackno = 1;
-  int last_seqno_sent = 1;
+  int window_size; //= c->window;                             //permits SWS = RWS
+  int my_ackno; //= 1;
+  int last_seqno_sent; //= 1; 
 
   /* Add your own data fields below this */
 
@@ -97,7 +97,7 @@ void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                 //size_t n is the size of packet length in bytes
 {
   /* Packet size check vs. available buffer */
-  if (n > c->conn_bufspace)
+  if (n > r->c->conn_bufspace)                                  //r is an instance of rel_t, c is a instance of conn_t
   {
     return;                                                     //drops packet, does not send ack
   }
