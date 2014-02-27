@@ -28,6 +28,7 @@ struct reliable_state {
   packet_t * lastPacketTouched;                                         //is the last packet either sent or received 
   packet_t rcv_window_buffer[512000];                                   //QUESTION - is this correct? trying to make an array of packets...
   packet_t snd_window_buffer[512000];                                   //hardcoded to 1000 full DATA packets worth of bytes
+  _Bool rcvd_EOF;
 
 
   /* Add your own data fields below this */
@@ -53,6 +54,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
   r->last_seqno_sent = 0;
   //r->rcv_window_buffer[r->window_size];                               //QUESTION - is this correct?
   //r->snd_window_buffer[r->window_size];                               //hardcoded above in reliable_struct to 1000 worth of packets
+  r->rcvd_EOF = 0;
 
   if (!c) {                                                             //if our connection object "c" does not exist, create it
     c = conn_create (r, ss);
@@ -82,7 +84,21 @@ rel_destroy (rel_t *r)
     r->next->prev = r->prev;
   *r->prev = r->next;
   conn_destroy (r->c);
-
+/*
+  if (r->rcvd_EOF == 1)
+  {
+    if (conn_input(r->c) == -1)
+    {
+      if (all packets i have sent have been ackd)
+      {
+        if (i have no data left to write with conn_output)
+        {
+          conn_destroy (r->c);
+        }
+      }
+    }
+  }
+  */   
   /* Free any other allocated memory here */
 }
 
@@ -155,8 +171,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
           pkt->cksum = to_be_compared_cksum;
           r->lastPacketTouched = pkt;
           rel_output (r);
-          
         }
+
         /* Out of Order Data Packet Handling */
         else if (ntohl(pkt->seqno) > r->my_ackno)
         {
@@ -183,6 +199,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
           return;                                                   //packet is below receive window
         }
       }
+
       /* ACK Packet Handling */
       if (n == 8)
       {
@@ -200,8 +217,13 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
         {
           return;                                                     //bad ACKNO, reject packet
         }
+      }
 
-
+      /* EOF Packet Handling */
+      if (n == 12)
+      {
+        r->rcvd_EOF = 1;
+        rel_output(r);
       }
     }
 
@@ -246,6 +268,7 @@ rel_output (rel_t *r)
   /* r->lastPacketTouched will contain the last packet received, which you will need to prepend to a full window_buffer if a full
   window_buffer exists */
   /* call conn_output, make sure you're not trying to call conn_output for more than the value conn_bufspace returns */
+  /* when r->rcvd_EOF == 1, send an EOF to output by calling conn_output with a len of 0 */
 }
 
 void
