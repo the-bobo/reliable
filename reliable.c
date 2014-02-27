@@ -26,7 +26,9 @@ struct reliable_state {
   int my_ackno; 
   int last_seqno_sent;
   packet_t * lastPacketTouched;                                         //is the last packet either sent or received 
-  packet_t window_buffer[];                                             //QUESTION - is this correct? trying to make an array of packets...
+  packet_t rcv_window_buffer[512000];                                   //QUESTION - is this correct? trying to make an array of packets...
+  packet_t snd_window_buffer[512000];                                   //hardcoded to 1000 full DATA packets worth of bytes
+
 
   /* Add your own data fields below this */
 
@@ -49,7 +51,8 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
   r->window_size = cc->window;      
   r->my_ackno = 1;
   r->last_seqno_sent = 0;
-  r->window_buffer[r->window_size];                                     //QUESTION - is this correct?
+  //r->rcv_window_buffer[r->window_size];                               //QUESTION - is this correct?
+  //r->snd_window_buffer[r->window_size];                               //hardcoded above in reliable_struct to 1000 worth of packets
 
   if (!c) {                                                             //if our connection object "c" does not exist, create it
     c = conn_create (r, ss);
@@ -106,13 +109,13 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
   /* Packet size check vs. available buffer */
   //if pkt->seqno is outside of receiver window then drop.
   
-  if (pkt->seqno < r->my_ackno)
+  if (ntohl(pkt->seqno) < r->my_ackno)
   {
     return;                                                           //drops packet, does not send ack
   }
 
   int upper_window = r->my_ackno + r->window_size;
-  if (pkt->seqno > upper_window)
+  if (ntohl(pkt->seqno) > upper_window)
   {
     return;                                                           //drops packet, does not send ack
   }
@@ -126,7 +129,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
   //if (n <= conn_bufspace(r->c))
  // {
     /* Check cksum */
-    int to_be_compared_cksum = pkt->cksum;
+    int to_be_compared_cksum = pkt->cksum;                            //pkt->cksum is in network order, and the cksum() function
+                                                                      //returns a network order number, so no htonl needs to be called
     pkt->cksum = 0;
     if (cksum(pkt, n) != to_be_compared_cksum)
     {
@@ -134,43 +138,70 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
     }
     else if (cksum(pkt, n) == to_be_compared_cksum)
     {
+      /* Data Packet Handling */
       if (n > 12)
       {
-        if (pkt->seqno == r->my_ackno)
+        if (ntohl(pkt->seqno) == r->my_ackno)
         {
           r->my_ackno++;
           /* Construct ACK packet */
           packet_t *ackPacket = malloc(sizeof (struct packet));       //uses a "packet_t" type defined in rlib.c line 446
           ackPacket->len = 8;
-          ackPacket->ackno = r->my_ackno;
+          ackPacket->ackno = htonl(r->my_ackno);
           ackPacket->cksum = cksum(ackPacket, 8);
           conn_sendpkt (r->c, ackPacket, ackPacket->len);             //send ACK packet with my_ackno
 
           /* Pass to rel_output */
+          pkt->cksum = to_be_compared_cksum;
           r->lastPacketTouched = pkt;
           rel_output (r);
           
         }
-        else if (pkt->seqno > r->my_ackno)
+        /* Out of Order Data Packet Handling */
+        else if (ntohl(pkt->seqno) > r->my_ackno)
         {
-          if((pkt->seqno - r->my_ackno) > r->window_size)
+          if((ntohl(pkt->seqno) - r->my_ackno) > r->window_size)
           {
             return;                                                   //packet is outside of receive window
           }
           /* add packet to buffer */
-          if((pkt->seqno - r->my_ackno) < r->window_size)
+          if((ntohl(pkt->seqno) - r->my_ackno) < r->window_size)
           {
-            r->window_buffer[pkt->seqno - r->my_ackno - 1] = *pkt;       //QUESTION - correct? stores packet in window buffer, in order
+            r->rcv_window_buffer[ntohl(pkt->seqno) - r->my_ackno - 1] = *pkt;       //QUESTION - correct? stores packet in rcv window buffer, in order
                                                                       //assumes array index values start at 0
             /* send DUPACK */
             packet_t *ackPacket = malloc(sizeof (struct packet));     //uses a "packet_t" type defined in rlib.c line 446
             ackPacket->len = 8;
-            ackPacket->ackno = r->my_ackno;
+            ackPacket->ackno = htonl(r->my_ackno);
             ackPacket->cksum = cksum(ackPacket, 8);
             conn_sendpkt (r->c, ackPacket, ackPacket->len);           //send DUPACK packet with my_ackno
           }
 
         }
+        else if (ntohl(pkt->seqno) < r->my_ackno)
+        {
+          return;                                                   //packet is below receive window
+        }
+      }
+      /* ACK Packet Handling */
+      if (n == 8)
+      {
+        if(ntohl(pkt->ackno) == r->last_seqno_sent + 1)
+        {
+          /* send next window's worth of packets from send window buffer */
+        }
+
+        if(ntohl(pkt->ackno) < r->last_seqno_sent + 1)
+        {
+          /* either do nothing and wait for timeout to retransmit, or, retransmit the packet whose seqno == pkt->ackno */
+        }
+
+        if(ntohl(pkt->ackno) > r->last_seqno_sent + 1)
+        {
+          return;                                                     //bad ACKNO, reject packet
+        }
+
+
       }
     }
 
