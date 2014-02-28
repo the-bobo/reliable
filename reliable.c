@@ -64,6 +64,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
   //r->rcv_window_buffer[r->window_size];                               //QUESTION - is this correct?
   //r->snd_window_buffer[r->window_size];                               //hardcoded above in reliable_struct to 1000 worth of packets
   r->rcvd_EOF = 0;
+  void EOF;                                                             //a useless buffer used for conn_output len 0 on receipt of EOF
 
   if (!c) {                                                             //if our connection object "c" does not exist, create it
     c = conn_create (r, ss);
@@ -245,7 +246,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
       if (n == 12)
       {
         r->rcvd_EOF = 1;
-        rel_output(r);
+        conn_output(r->c, *EOF, 0);
       }
     }
 
@@ -265,7 +266,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
   /* X-  if packet size == 8, ACK received, ACK logic */
     /* if this_rcvd.ackno < last_sent.seqno, resend packet for which its seqno == this_rcvd.ackno */
  
-  /* if packet size == 12, EOF condition reached, EOF logic + send EOF pkt to other side (conn_output w/ length 0) */
+  /* if packet size == 12, EOF condition reached, call conn_output with 0 */
  
 }
 
