@@ -63,6 +63,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
   //r->snd_window_buffer[r->window_size];                               //hardcoded above in reliable_struct to 1000 worth of packets
   r->rcvd_EOF = 0;
 
+
   if (!c) {                                                             //if our connection object "c" does not exist, create it
     c = conn_create (r, ss);
     if (!c) {
@@ -243,7 +244,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
       if (n == 12)
       {
         r->rcvd_EOF = 1;
-        rel_output(r);
+        conn_output(r->c, r->not_real_buf, 0);
       }
     }
 
@@ -263,7 +264,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
   /* X-  if packet size == 8, ACK received, ACK logic */
     /* if this_rcvd.ackno < last_sent.seqno, resend packet for which its seqno == this_rcvd.ackno */
  
-  /* if packet size == 12, EOF condition reached, EOF logic + send EOF pkt to other side (conn_output w/ length 0) */
+  /* if packet size == 12, EOF condition reached, call conn_output with 0 */
  
 }
 
@@ -358,6 +359,10 @@ rel_output (rel_t *r)
   can accept packets with seqno from (my_ackno + 1) to (my_ackno + window_size) inclusive, so you could be passed a
   data packet with the ackno we've been waiting for and need to print it and flush the buffer also. */
 
+  /**************
+  I'm having trouble figuring out exactly what this method is
+  supposed to do. If we meet up I'm confident I can write it tonight.
+  ***************/
 
   /* r->lastPacketTouched will contain the last packet received, which you will need to prepend to a full window_buffer if a full
   window_buffer exists */
