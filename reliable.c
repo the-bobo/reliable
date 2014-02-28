@@ -17,6 +17,13 @@
 
 //main is in rlib.c line 904
 
+/* rich_packet structure - includes additional useful per-packet state */
+struct rich_packet {
+  packet_t packet;
+  _Bool has_been_ackd; /* if this is a packet i sent, has it been ackd? */
+  int time_sent;  /* when was this packet sent? */
+};
+
 struct reliable_state {
   rel_t *next;			/* Linked list for traversing all connections */
   rel_t **prev;
@@ -25,9 +32,9 @@ struct reliable_state {
   int window_size; 
   int my_ackno; 
   int last_seqno_sent;
-  packet_t * lastPacketTouched;                                         //is the last packet either sent or received 
-  packet_t rcv_window_buffer[512000];                                   //QUESTION - is this correct? trying to make an array of packets...
-  packet_t snd_window_buffer[512000];                                   //hardcoded to 1000 full DATA packets worth of bytes
+  packet_t * lastPacketTouched;                                            //is the last packet either sent or received 
+  struct rich_packet rcv_window_buffer[512000];                                   //QUESTION - is this correct? trying to make an array of packets...
+  struct rich_packet snd_window_buffer[512000];                                   //hardcoded to 1000 full DATA packets worth of bytes
   _Bool rcvd_EOF;
 
 
@@ -35,6 +42,7 @@ struct reliable_state {
 
 };
 rel_t *rel_list;
+int global_timer = 0;   //this is a global timer, every time rel_timer is called, increment global_timer by 1
 
 /* Creates a new reliable protocol session, returns NULL on failure.
  * Exactly one of c and ss should be NULL.  (ss is NULL when called
@@ -183,7 +191,10 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
           /* add packet to buffer */
           if((ntohl(pkt->seqno) - r->my_ackno) < r->window_size)
           {
-            r->rcv_window_buffer[ntohl(pkt->seqno) - r->my_ackno - 1] = *pkt;       //QUESTION - correct? stores packet in rcv window buffer, in order
+            //this is wrong - needs to be rewritten so that it 1) uses seqno as 
+            //the index, and 2) mods the seqno so that you're only using an effective
+            //array length == your window size
+            r->rcv_window_buffer[ntohl(pkt->seqno) - r->my_ackno - 1].packet = *pkt;       //QUESTION - correct? stores packet in rcv window buffer, in order
                                                                       //assumes array index values start at 0
             /* send DUPACK */
             packet_t *ackPacket = malloc(sizeof (struct packet));     //uses a "packet_t" type defined in rlib.c line 446
@@ -205,7 +216,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
       {
         if(ntohl(pkt->ackno) == r->last_seqno_sent + 1)
         {
-          /* send next window's worth of packets from send window buffer */
+          r->snd_window_buffer[r->last_seqno_sent].has_been_ackd = 1;
+          /* send next packets from send window buffer */
+          rel_read(r);
         }
 
         if(ntohl(pkt->ackno) < r->last_seqno_sent + 1)
@@ -251,6 +264,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
 void
 rel_read (rel_t *s)                                                                   //this is actually rel_send
 {
+  /* when you send a packet, add it to the snd_window_buffer, and make its index position in that array == its seqno */
+  /* when you send a packet, edit its timestamp in the snd_window_buffer by setting time_sent to global_timer */
   /* make sure when you send a data packet it still sets the ACKNO field to my_ackno on it -- Hongze */
   /* make sure when you send a data packet you increment r->last_seqno_sent FIRST before you assign it to
   be the seqno of the packet (since we initialize it to 0 in rel_create) */
@@ -274,6 +289,7 @@ rel_output (rel_t *r)
 void
 rel_timer ()
 {
+  global_timer++;
   /* Retransmit any packets that need to be retransmitted */
   /* Should keep track of received ACKs and outstanding ACKs, retransmit
   as needed, and throttle send rate to match available window space */
