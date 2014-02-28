@@ -28,7 +28,6 @@ struct rich_packet {
 struct reliable_state {
   rel_t *next;			/* Linked list for traversing all connections */
   rel_t **prev;
-
   conn_t *c;			/* This is the connection object */
   int window_size; 
   int my_ackno; 
@@ -36,12 +35,11 @@ struct reliable_state {
   packet_t * lastPacketTouched;                                            //is the last packet either sent or received 
   struct rich_packet rcv_window_buffer[512000];                                   //QUESTION - is this correct? trying to make an array of packets...
   struct rich_packet snd_window_buffer[512000];                                   //hardcoded to 1000 full DATA packets worth of bytes
+  char *user_input[512000];                                                       //Same question for me, but trying to handle user input
   _Bool rcvd_EOF;
 
-
-  /* Add your own data fields below this */
-
 };
+
 rel_t *rel_list;
 int global_timer = 0;   //this is a global timer, every time rel_timer is called, increment global_timer by 1
 
@@ -55,7 +53,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 {
   rel_t *r;                                                             //r points to an object of type rel_t
 
-  r = xmalloc (sizeof (*r));                                            //gives r memory that is the size of the object r points to
+  r = malloc (sizeof (*r));                                            //gives r memory that is the size of the object r points to
   memset (r, 0, sizeof (*r));                                           //initializes the value of the memory space starting at r to 0
 
   r->window_size = cc->window;      
@@ -273,33 +271,109 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
 void
 rel_read (rel_t *s)                                                                   //this is actually rel_send
 {
-  /* when you send a packet, add it to the snd_window_buffer, and make its index position in that array == its seqno */
-  /* when you send a packet, edit its timestamp in the snd_window_buffer by setting time_sent to global_timer */
-  /* make sure when you send a data packet it still sets the ACKNO field to my_ackno on it -- Hongze */
+  // Call conn_input and put the result in user_input
+  // QUESTION: Do we call this in a loop? It doesn't seem like it;
+  // it seems that rel_read is called each time in conn_poll (rlib.c line 498), which
+  // is in a loop in the main method
+  int input = conn_input(s->c, user_input, s->window_size)
+
+  // If conn_input returns -1, EOF; destroy
+  if (input == -1) {
+    //rel_destroy();
+  }
+
+  // If no data lies in buffer to be sent, return
+  if (input == 0) {
+    return;
+  }
+
+  // If the amount drained from conn_input is > window size, return
+  if (conn_input > s->window_size) {
+    return;
+  }
+
+  size_t i;
+
+  // For every 500-byte chunk of data in the buffer...
+  for (i = 0; i < input; i+500) {
+
   /* make sure when you send a data packet you increment r->last_seqno_sent FIRST before you assign it to
-  be the seqno of the packet (since we initialize it to 0 in rel_create) */
-  /* while conn_input > 0, drain it */
-  /* ensure that the amount you're draining from conn_input is !> reliable_state.window_size) */
-  /* ***when an EOF is rcvd, conn_input returns -1 -- is it already checking cksum and len? */
+    be the seqno of the packet (since we initialize it to 0 in rel_create) */
+    
+    // Get seqno and increment it
+    s -> last_seqno_sent++;
+    int new_seqno = s -> last_seqno_sent;
+
+    // Initialize a new rich_packet
+    rich_packet *packet_to_send = malloc(sizeof(rich_packet));
+
+    // Initialize a new packet_t within rich_packet
+    packet_to_send->packet = malloc(sizeof(packet_t));
+
+    // Question: how do we go about dynamically-sized packets?
+    // I've left packet length as 512 bytes for now; obviously, 
+    // this isn't optimal.
+    packet_to_send->packet->data = char data[500];
+    packet_to_send->packet->len = 512;
+    packet_to_send->packet->seqno = htons(new_seqno);
+
+    /* make sure when you send a data packet it still sets the ACKNO field to my_ackno on it -- Hongze */
+    packet_to_send->packet->ackno = htons(my_ackno);
+
+    /* compute checksum, again 500 bytes */
+    packet_to_send->packet->cksum = cksum(packet_to_send->packet->data, 500)
+
+    /* How best to take data from the buffer and make it into packets? */
+    /* I'm going to use memcpy for now, but I need some help here */
+    memcpy(packet_to_send->packet->data, user_input, 500)
+
+    /* when you send a packet, edit its timestamp in the snd_window_buffer by setting time_sent to global_timer */
+    packet_to_send->time_sent = global_timer;
+   
+    /* when you send a packet, add it to the snd_window_buffer, and make its index position in that array == its seqno */
+    snd_window_buffer[new_seqno] = packet_to_send;  
+
+        /* ---- SENDING PACKET ---- */
+
+    // Do we want to do this here? Should this be done out of the buffer?
+    conn_sendpkt(s, rich_packet->packet, 512);
+
+  }
+
 }
 
 void
 rel_output (rel_t *r)
 {
+
+  /* when r->rcvd_EOF == 1, send an EOF to output by calling conn_output with a len of 0 */
+  if(r->rcvd_EOF == 1) {
+    conn_output(r->c, );
+  }
+
   /* when you output to screen, change the rcv_window_buffer[position].is_full to 0 */
+  r->rcv_window_buffer[my_ackno]->is_full = 0;
+  
   /* make sure when you output to screen you check the window_buffer to see if there are packets waiting in there. the buffer
   can accept packets with seqno from (my_ackno + 1) to (my_ackno + window_size) inclusive, so you could be passed a
   data packet with the ackno we've been waiting for and need to print it and flush the buffer also. */
+
+
   /* r->lastPacketTouched will contain the last packet received, which you will need to prepend to a full window_buffer if a full
   window_buffer exists */
+  
+
   /* call conn_output, make sure you're not trying to call conn_output for more than the value conn_bufspace returns */
-  /* when r->rcvd_EOF == 1, send an EOF to output by calling conn_output with a len of 0 */
+  co
+
 }
 
 void
 rel_timer ()
 {
   global_timer++;
+
+  /* I want to talk about exactly how to handle received and outstanding ACKs */
 
   /* Retransmit any packets that need to be retransmitted */
   /* Should keep track of received ACKs and outstanding ACKs, retransmit
