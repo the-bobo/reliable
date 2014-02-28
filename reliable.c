@@ -22,6 +22,7 @@ struct rich_packet {
   packet_t packet;
   _Bool has_been_ackd; /* if this is a packet i sent, has it been ackd? */
   int time_sent;  /* when was this packet sent? */
+  _Bool is_full; /* is this full? 1 = yes, 0 = no. on delete, set to 0 */
 };
 
 struct reliable_state {
@@ -189,13 +190,19 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
             return;                                                   //packet is outside of receive window
           }
           /* add packet to buffer */
-          if((ntohl(pkt->seqno) - r->my_ackno) < r->window_size)
+          if((ntohl(pkt->seqno) - r->my_ackno) <= r->window_size)     //packet is ahead of my_ackno, but w/i receive window
           {
-            //this is wrong - needs to be rewritten so that it 1) uses seqno as 
-            //the index, and 2) mods the seqno so that you're only using an effective
-            //array length == your window size
-            r->rcv_window_buffer[ntohl(pkt->seqno) - r->my_ackno - 1].packet = *pkt;       //QUESTION - correct? stores packet in rcv window buffer, in order
-                                                                      //assumes array index values start at 0
+            int position = ntohl(pkt->seqno) % r->window_size;
+            if (r->rcv_window_buffer[position].is_full == 0)
+            {
+              r->rcv_window_buffer[position].packet = *pkt;
+              r->rcv_window_buffer[position].is_full = 1;
+            }
+            else if (r->rcv_window_buffer[position].is_full == 1)
+            {
+              return;                                                 //no place in rcv_window_buffer for this packet
+            }
+
             /* send DUPACK */
             packet_t *ackPacket = malloc(sizeof (struct packet));     //uses a "packet_t" type defined in rlib.c line 446
             ackPacket->len = 8;
@@ -216,6 +223,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
       {
         if(ntohl(pkt->ackno) == r->last_seqno_sent + 1)
         {
+          //delete the packet from the send buffer, as it has been acked
           r->snd_window_buffer[r->last_seqno_sent].has_been_ackd = 1;
           /* send next packets from send window buffer */
           rel_read(r);
@@ -223,7 +231,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
 
         if(ntohl(pkt->ackno) < r->last_seqno_sent + 1)
         {
-          /* either do nothing and wait for timeout to retransmit, or, retransmit the packet whose seqno == pkt->ackno */
+          return;
+          /* currently doing nothing and waiting for timeout to retransmit, not retransmitting the packet whose seqno == pkt->ackno */
         }
 
         if(ntohl(pkt->ackno) > r->last_seqno_sent + 1)
@@ -253,7 +262,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
   If not dupe, check to see if in order. If in order, pass to rel_output and send
   ACK. If out of order, buffer and send DUPACK[seqno] for cumulative ACK. */
 
-  /* if packet size == 8, ACK received, ACK logic */
+  /* X-  if packet size == 8, ACK received, ACK logic */
     /* if this_rcvd.ackno < last_sent.seqno, resend packet for which its seqno == this_rcvd.ackno */
  
   /* if packet size == 12, EOF condition reached, EOF logic + send EOF pkt to other side (conn_output w/ length 0) */
@@ -277,6 +286,7 @@ rel_read (rel_t *s)                                                             
 void
 rel_output (rel_t *r)
 {
+  /* when you output to screen, change the rcv_window_buffer[position].is_full to 0 */
   /* make sure when you output to screen you check the window_buffer to see if there are packets waiting in there. the buffer
   can accept packets with seqno from (my_ackno + 1) to (my_ackno + window_size) inclusive, so you could be passed a
   data packet with the ackno we've been waiting for and need to print it and flush the buffer also. */
@@ -290,6 +300,7 @@ void
 rel_timer ()
 {
   global_timer++;
+
   /* Retransmit any packets that need to be retransmitted */
   /* Should keep track of received ACKs and outstanding ACKs, retransmit
   as needed, and throttle send rate to match available window space */
