@@ -290,6 +290,7 @@ rel_output (rel_t *r)
   /* In Order Packet Printing */
   const void *ptr = r->lastPacketTouched->data;
   conn_output(r->c, ptr, sizeof(ptr));
+  return;
 
   /* Out of Order Packet Printing */
   //conn_output(r->c, r->rcv_window_buffer[1].packet.data, sizeof(r->rcv_window_buffer[1].packet.data));
