@@ -263,10 +263,10 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
   If not dupe, check to see if in order. If in order, pass to rel_output and send
   ACK. If out of order, buffer and send DUPACK[seqno] for cumulative ACK. */
 
-  /* X-  if packet size == 8, ACK received, ACK logic */
+  /* X - if packet size == 8, ACK received, ACK logic */
     /* if this_rcvd.ackno < last_sent.seqno, resend packet for which its seqno == this_rcvd.ackno */
  
-  /* if packet size == 12, EOF condition reached, call conn_output with 0 */
+  /* X - if packet size == 12, EOF condition reached, call conn_output with 0 */
  
 }
 
@@ -287,6 +287,13 @@ rel_read (rel_t *s)                                                             
 void
 rel_output (rel_t *r)
 {
+  /* In Order Packet Printing */
+  const void *ptr = r->lastPacketTouched->data;
+  conn_output(r->c, ptr, sizeof(ptr));
+
+  /* Out of Order Packet Printing */
+  //conn_output(r->c, r->rcv_window_buffer[1].packet.data, sizeof(r->rcv_window_buffer[1].packet.data));
+
   /* when you output to screen, change the rcv_window_buffer[position].is_full to 0 */
   /* make sure when you output to screen you check the window_buffer to see if there are packets waiting in there. the buffer
   can accept packets with seqno from (my_ackno + 1) to (my_ackno + window_size) inclusive, so you could be passed a
