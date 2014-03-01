@@ -287,6 +287,9 @@ rel_read (rel_t *s)                                                             
 void
 rel_output (rel_t *r)
 {
+  const void *ptr = r->lastPacketTouched->data;
+  conn_output(r->c, ptr, sizeof(ptr));
+
   /* when you output to screen, change the rcv_window_buffer[position].is_full to 0 */
   /* make sure when you output to screen you check the window_buffer to see if there are packets waiting in there. the buffer
   can accept packets with seqno from (my_ackno + 1) to (my_ackno + window_size) inclusive, so you could be passed a
