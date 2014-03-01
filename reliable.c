@@ -290,8 +290,13 @@ rel_output (rel_t *r)
 {
 
   /* In Order Packet Printing */
-  const void *ptr = r->lastPacketTouched->data;
-  conn_output(r->c, ptr, sizeof(ptr));
+  void *ptr = r->lastPacketTouched->data;
+  size_t output_len = ntohs(r->lastPacketTouched->len - htons(12));
+  conn_output(r->c, ptr, output_len);
+
+    //fprintf(stderr, "Size of sizeof(ptr): %zu\n", sizeof(ptr));
+  //conn_output(r->c, ptr, sizeof(ptr));
+
   //return;
 
   /* Out of Order Packet Printing */
