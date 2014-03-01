@@ -181,8 +181,9 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
         {
           r->my_ackno++;
           /* Construct ACK packet */
-/*        packet_t *ackPacket = malloc(sizeof (struct packet));       //uses a "packet_t" type defined in rlib.c line 446
-          ackPacket->len = 8;
+
+          packet_t *ackPacket = malloc(sizeof (struct packet));       //uses a "packet_t" type defined in rlib.c line 446
+          ackPacket->len = htons(8);
           ackPacket->ackno = htonl(r->my_ackno);
           ackPacket->cksum = cksum(ackPacket, 8);
           conn_sendpkt (r->c, ackPacket, ackPacket->len);             //send ACK packet with my_ackno
@@ -215,8 +216,13 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
             }
 
             /* send DUPACK */
+<<<<<<< HEAD
 /*          packet_t *ackPacket = malloc(sizeof (struct packet));     //uses a "packet_t" type defined in rlib.c line 446
             ackPacket->len = 8;
+=======
+            packet_t *ackPacket = malloc(sizeof (struct packet));     //uses a "packet_t" type defined in rlib.c line 446
+            ackPacket->len = htons(8);
+>>>>>>> bobo
             ackPacket->ackno = htonl(r->my_ackno);
             ackPacket->cksum = cksum(ackPacket, 8);
             conn_sendpkt (r->c, ackPacket, ackPacket->len);           //send DUPACK packet with my_ackno
@@ -297,6 +303,7 @@ rel_read (rel_t *s)                                                             
 void
 rel_output (rel_t *r)
 {
+
   /* In Order Packet Printing */
   const void *ptr = r->lastPacketTouched->data;
   conn_output(r->c, ptr, sizeof(ptr));
@@ -304,6 +311,7 @@ rel_output (rel_t *r)
 
   /* Out of Order Packet Printing */
   //conn_output(r->c, r->rcv_window_buffer[1].packet.data, sizeof(r->rcv_window_buffer[1].packet.data));
+
 
   /* when you output to screen, change the rcv_window_buffer[position].is_full to 0 */
   /* make sure when you output to screen you check the window_buffer to see if there are packets waiting in there. the buffer
