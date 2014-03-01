@@ -25,6 +25,8 @@ struct rich_packet {
   _Bool is_full; /* is this full? 1 = yes, 0 = no. on delete, set to 0 */
 };
 
+//typedef struct rich_packet rich_packet;
+
 struct reliable_state {
   rel_t *next;			/* Linked list for traversing all connections */
   rel_t **prev;
@@ -275,14 +277,57 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
 void
 rel_read (rel_t *s)                                                                   //this is actually rel_send
 {
-  /* when you send a packet, add it to the snd_window_buffer, and make its index position in that array == its seqno */
-  /* when you send a packet, edit its timestamp in the snd_window_buffer by setting time_sent to global_timer */
-  /* make sure when you send a data packet it still sets the ACKNO field to my_ackno on it -- Hongze */
-  /* make sure when you send a data packet you increment r->last_seqno_sent FIRST before you assign it to
-  be the seqno of the packet (since we initialize it to 0 in rel_create) */
-  /* while conn_input > 0, drain it */
-  /* ensure that the amount you're draining from conn_input is !> reliable_state.window_size) */
-  /* ***when an EOF is rcvd, conn_input returns -1 -- is it already checking cksum and len? */
+
+  s->last_seqno_sent += 1;
+  int new_seqno = s -> last_seqno_sent;
+
+/*
+          packet_t *ackPacket = malloc(sizeof (struct packet));     //uses a "packet_t" type defined in rlib.c line 446
+            ackPacket->len = htons(8);
+            ackPacket->ackno = htonl(r->my_ackno);
+            ackPacket->cksum = cksum(ackPacket, 8);
+            conn_sendpkt (r->c, ackPacket, ackPacket->len);
+            */
+
+  struct rich_packet *packet_to_send; 
+  packet_to_send = malloc(sizeof(struct rich_packet));
+
+  // Initialize a new packet_t within rich_packet
+  //packet_to_send->packet = malloc(sizeof(packet_t));
+  packet_to_send->packet.seqno = htonl(new_seqno);
+  packet_to_send->packet.ackno = htonl(s->my_ackno);
+  packet_to_send->packet.cksum = 0; 
+
+  int input = conn_input(s->c, packet_to_send->packet.data, 500);
+
+  // If conn_input returns -1, EOF; destroy
+  if (input == -1) {
+    fprintf(stderr, "%s\n", "EOF destroy");
+    //rel_destroy();
+  }
+
+  // If no data lies in buffer to be sent, return
+  if (input == 0) {
+    fprintf(stderr, "%s\n", "no data to be read");
+    return;
+  }
+
+  // If the amount drained from conn_input is > window size, return
+  if (input > s->window_size * sizeof(packet_t)) {
+    fprintf(stderr, "%d\n", input);
+    return;
+  }
+
+  else {
+    packet_to_send->packet.len = htons(input + 12);
+  }
+
+  packet_to_send->packet.cksum = cksum(&packet_to_send->packet, ntohs(packet_to_send->packet.len));
+
+  packet_to_send->time_sent = global_timer;
+ 
+  conn_sendpkt(s->c, &packet_to_send->packet, packet_to_send->packet.len);
+ 
 }
 
 void
