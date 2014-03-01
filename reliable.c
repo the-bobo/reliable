@@ -133,9 +133,6 @@ rel_demux (const struct config_common *cc,
 void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n is the size of packet length in bytes
 {
-  fprintf(stderr, "Received Packet No.: %d\n", ntohl(pkt->seqno));
-  fprintf(stderr, "Size_t of packet: %zu\n", n);
-  fprintf(stderr, "Return value of conn_bufspace: %zu\n", conn_bufspace(r->c));
 
   //if pkt->seqno is outside of receiver window then drop.
   if (ntohl(pkt->seqno) < r->my_ackno)
