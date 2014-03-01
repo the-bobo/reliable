@@ -172,7 +172,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
           r->my_ackno++;
           /* Construct ACK packet */
           packet_t *ackPacket = malloc(sizeof (struct packet));       //uses a "packet_t" type defined in rlib.c line 446
-          ackPacket->len = 8;
+          ackPacket->len = htons(8);
           ackPacket->ackno = htonl(r->my_ackno);
           ackPacket->cksum = cksum(ackPacket, 8);
           conn_sendpkt (r->c, ackPacket, ackPacket->len);             //send ACK packet with my_ackno
@@ -206,7 +206,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
 
             /* send DUPACK */
             packet_t *ackPacket = malloc(sizeof (struct packet));     //uses a "packet_t" type defined in rlib.c line 446
-            ackPacket->len = 8;
+            ackPacket->len = htons(8);
             ackPacket->ackno = htonl(r->my_ackno);
             ackPacket->cksum = cksum(ackPacket, 8);
             conn_sendpkt (r->c, ackPacket, ackPacket->len);           //send DUPACK packet with my_ackno
