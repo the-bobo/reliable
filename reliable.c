@@ -281,19 +281,10 @@ rel_read (rel_t *s)                                                             
   s->last_seqno_sent += 1;
   int new_seqno = s -> last_seqno_sent;
 
-/*
-          packet_t *ackPacket = malloc(sizeof (struct packet));     //uses a "packet_t" type defined in rlib.c line 446
-            ackPacket->len = htons(8);
-            ackPacket->ackno = htonl(r->my_ackno);
-            ackPacket->cksum = cksum(ackPacket, 8);
-            conn_sendpkt (r->c, ackPacket, ackPacket->len);
-            */
-
   struct rich_packet *packet_to_send; 
   packet_to_send = malloc(sizeof(struct rich_packet));
 
   // Initialize a new packet_t within rich_packet
-  //packet_to_send->packet = malloc(sizeof(packet_t));
   packet_to_send->packet.seqno = htonl(new_seqno);
   packet_to_send->packet.ackno = htonl(s->my_ackno);
   packet_to_send->packet.cksum = 0; 
