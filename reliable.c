@@ -135,7 +135,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
   /* Packet size check vs. available buffer */
   //if pkt->seqno is outside of receiver window then drop.
   
-/*
+
 
   if (ntohl(pkt->seqno) < r->my_ackno)
   {
@@ -148,7 +148,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
     return;                                                           //drops packet, does not send ack
   }
 
-*/
+
 
 /* Do not think this is necessary
   if (n > conn_bufspace(r->c))                                        //r is an instance of rel_t, c is a instance of conn_t
@@ -156,18 +156,12 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
     return;                                                           //drops packet, does not send ack
   }
 */
-  //if (n <= conn_bufspace(r->c))
- // {
+ if (n <= conn_bufspace(r->c))
+   {
     /* Check cksum */
-//    int to_be_compared_cksum = pkt->cksum;                            //pkt->cksum is in network order, and the cksum() function
+    int to_be_compared_cksum = pkt->cksum;                            //pkt->cksum is in network order, and the cksum() function
                                                                       //returns a network order number, so no htonl needs to be called
-    /*
-    fprintf(stderr, "Packet's Checksum: %d", pkt->cksum);
     pkt->cksum = 0;
-    int calc_cksum = cksum(pkt, ntohs(pkt->len));
-    fprintf(stderr, "Calculated Checksum: %d", calc_cksum);
-*/
-/*    pkt->cksum = 0;
     if (cksum(pkt, ntohs(pkt->len)) != to_be_compared_cksum)
     {
       return;                                                         //drops packet, does not send ack
@@ -175,13 +169,12 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
     else if (cksum(pkt, ntohs(pkt->len)) == to_be_compared_cksum)
     {
       /* Data Packet Handling */
-/*     if (ntohs(pkt->len) > 12)
+     if (ntohs(pkt->len) > 12)
       {
         if (ntohl(pkt->seqno) == r->my_ackno)
         {
           r->my_ackno++;
           /* Construct ACK packet */
-
           packet_t *ackPacket = malloc(sizeof (struct packet));       //uses a "packet_t" type defined in rlib.c line 446
           ackPacket->len = htons(8);
           ackPacket->ackno = htonl(r->my_ackno);
@@ -189,20 +182,20 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
           conn_sendpkt (r->c, ackPacket, ackPacket->len);             //send ACK packet with my_ackno
 
           /* Pass to rel_output */
-/*        pkt->cksum = to_be_compared_cksum;
+          pkt->cksum = to_be_compared_cksum;
           r->lastPacketTouched = pkt;
           rel_output (r);
         }
 
         /* Out of Order Data Packet Handling */
- /*     else if (ntohl(pkt->seqno) > r->my_ackno)
+      else if (ntohl(pkt->seqno) > r->my_ackno)
         {
           if((ntohl(pkt->seqno) - r->my_ackno) > r->window_size)
           {
             return;                                                   //packet is outside of receive window
           }
           /* add packet to buffer */
-/*        if((ntohl(pkt->seqno) - r->my_ackno) <= r->window_size)     //packet is ahead of my_ackno, but w/i receive window
+        if((ntohl(pkt->seqno) - r->my_ackno) <= r->window_size)     //packet is ahead of my_ackno, but w/i receive window
           {
             int position = ntohl(pkt->seqno) % r->window_size;
             if (r->rcv_window_buffer[position].is_full == 0)
@@ -216,13 +209,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
             }
 
             /* send DUPACK */
-<<<<<<< HEAD
-/*          packet_t *ackPacket = malloc(sizeof (struct packet));     //uses a "packet_t" type defined in rlib.c line 446
-            ackPacket->len = 8;
-=======
             packet_t *ackPacket = malloc(sizeof (struct packet));     //uses a "packet_t" type defined in rlib.c line 446
             ackPacket->len = htons(8);
->>>>>>> bobo
             ackPacket->ackno = htonl(r->my_ackno);
             ackPacket->cksum = cksum(ackPacket, 8);
             conn_sendpkt (r->c, ackPacket, ackPacket->len);           //send DUPACK packet with my_ackno
@@ -236,21 +224,21 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
       }
 
       /* ACK Packet Handling */
-/*      if (ntohs(pkt->len) == 8)
+      if (ntohs(pkt->len) == 8)
       {
         if(ntohl(pkt->ackno) == r->last_seqno_sent + 1)
         {
           //delete the packet from the send buffer, as it has been acked
           r->snd_window_buffer[r->last_seqno_sent].has_been_ackd = 1;
           /* send next packets from send window buffer */
-/*          rel_read(r);
+          rel_read(r);
         }
 
         if(ntohl(pkt->ackno) < r->last_seqno_sent + 1)
         {
           return;
           /* currently doing nothing and waiting for timeout to retransmit, not retransmitting the packet whose seqno == pkt->ackno */
- /*       }
+        }
 
         if(ntohl(pkt->ackno) > r->last_seqno_sent + 1)
         {
@@ -259,14 +247,14 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
       }
 
       /* EOF Packet Handling */
- /*     if (ntohs(pkt->len) == 12)
+      if (ntohs(pkt->len) == 12)
       {
         r->rcvd_EOF = 1;
         conn_output(r->c, r->not_real_buf, 0);
       }
     }
 
- // }
+  }
 
   /* X - logic to evaluate conn_bufspace, which gives buffer available to conn_output.
   if conn_bufspace is full, reject packet and do not send ACK */
