@@ -338,12 +338,13 @@ rel_output (rel_t *r)
   size_t output_len = ntohs(r->lastPacketTouched->len - htons(12));
   conn_output(r->c, ptr, output_len);
 
-  int i = r->my_ackno + 1;
+  /* Out of Order Packet Printing */
+  int i = r->my_ackno % r->window_size + 1;
   while(r->rcv_window_buffer[i].is_full == 1)
   {
     i++;
   }
-  if (r->rcv_window_buffer[i-1].packet.seqno < r->my_ackno + 1)
+  if (ntohl(r->rcv_window_buffer[i-1].packet.seqno) < r->my_ackno + 1)
   {
     return;
   }
@@ -359,18 +360,6 @@ rel_output (rel_t *r)
     }
   }
 
-  //return;
-
-  /* Out of Order Packet Printing */
-  //conn_output(r->c, r->rcv_window_buffer[1].packet.data, sizeof(r->rcv_window_buffer[1].packet.data));
-
-
-  /* when you output to screen, change the rcv_window_buffer[position].is_full to 0 */
-  /* make sure when you output to screen you check the window_buffer to see if there are packets waiting in there. the buffer
-  can accept packets with seqno from (my_ackno + 1) to (my_ackno + window_size) inclusive, so you could be passed a
-  data packet with the ackno we've been waiting for and need to print it and flush the buffer also. */
-  /* r->lastPacketTouched will contain the last packet received, which you will need to prepend to a full window_buffer if a full
-  window_buffer exists */
   /* call conn_output, make sure you're not trying to call conn_output for more than the value conn_bufspace returns */
   /* when r->rcvd_EOF == 1, send an EOF to output by calling conn_output with a len of 0 */
 }
