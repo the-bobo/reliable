@@ -159,14 +159,15 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
         //if pkt->seqno is outside of receiver window then drop.
         if (ntohl(pkt->seqno) < r->my_ackno)
         {
-          fprintf(stderr, "Packet dropped: pkt->seqno < r->my_ackno\n");
+          fprintf(stderr, "Packet dropped: pkt->seqno < r->my_ackno\n Current pkt->seqno is: %d Current r->my_ackno is: %d\n", ntohl(pkt->seqno), r->my_ackno);
           return;                                                           //drops packet, does not send ack
         }
 
-        int upper_window = r->my_ackno + r->window_size - 1;
+        int upper_window = r->my_ackno + r->window_size;
+        fprintf(stderr, "Current upper window is: %d\n", upper_window);
         if (ntohl(pkt->seqno) > upper_window)
         {
-          fprintf(stderr, "Packet dropped: pkt->seqno > upper_window \n");
+          //fprintf(stderr, "Packet dropped: pkt->seqno > upper_window \n");
           return;                                                           //drops packet, does not send ack
         }
 
@@ -332,13 +333,31 @@ void
 rel_output (rel_t *r)
 {
 
-  /* In Order Packet Printing */
+  /* In Order Packet Printing - Prints my_ackno */
   void *ptr = r->lastPacketTouched->data;
   size_t output_len = ntohs(r->lastPacketTouched->len - htons(12));
   conn_output(r->c, ptr, output_len);
 
-    //fprintf(stderr, "Size of sizeof(ptr): %zu\n", sizeof(ptr));
-  //conn_output(r->c, ptr, sizeof(ptr));
+  int i = r->my_ackno + 1;
+  while(r->rcv_window_buffer[i].is_full == 1)
+  {
+    i++;
+  }
+  if (r->rcv_window_buffer[i-1].packet.seqno < r->my_ackno + 1)
+  {
+    return;
+  }
+  else
+  {
+    int j;
+    for (j = r->my_ackno + 1; j <= r->my_ackno + r->window_size; j++)
+    {
+      r->rcv_window_buffer[j].is_full = 0;
+      void *second_ptr = r->rcv_window_buffer[j].packet.data;
+      size_t second_output_len = ntohs(r->rcv_window_buffer[j].packet.len - htons(12));
+      conn_output(r->c, second_ptr, second_output_len);
+    }
+  }
 
   //return;
 
