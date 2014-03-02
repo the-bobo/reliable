@@ -159,12 +159,12 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
         //if pkt->seqno is outside of receiver window then drop.
         if (ntohl(pkt->seqno) < r->my_ackno)
         {
-          fprintf(stderr, "Packet dropped: pkt->seqno < r->my_ackno\n Current pkt->seqno is: %d Current r->my_ackno is: %d\n", ntohl(pkt->seqno), r->my_ackno);
+          //fprintf(stderr, "Packet dropped: pkt->seqno < r->my_ackno\n Current pkt->seqno is: %d Current r->my_ackno is: %d\n", ntohl(pkt->seqno), r->my_ackno);
           return;                                                           //drops packet, does not send ack
         }
 
         int upper_window = r->my_ackno + r->window_size;
-        fprintf(stderr, "Current upper window is: %d\n", upper_window);
+        //fprintf(stderr, "Current upper window is: %d\n", upper_window);
         if (ntohl(pkt->seqno) > upper_window)
         {
           //fprintf(stderr, "Packet dropped: pkt->seqno > upper_window \n");
@@ -174,8 +174,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
         //if this is the right data packet
         if (ntohl(pkt->seqno) == r->my_ackno)
         {
-          fprintf(stderr, "Packet passed to rel output: pkt->seqno == r->my_ackno\n");
-          fprintf(stderr, "pkt->seqno: %d r->my_ackno: %d\n", htonl(pkt->seqno), r->my_ackno);
+          //fprintf(stderr, "Packet passed to rel output: pkt->seqno == r->my_ackno\n");
+          //fprintf(stderr, "pkt->seqno: %d r->my_ackno: %d\n", htonl(pkt->seqno), r->my_ackno);
           r->my_ackno++;
           /* Construct ACK packet */
           packet_t *ackPacket = malloc(sizeof (struct packet));       //uses a "packet_t" type defined in rlib.c line 446
@@ -193,8 +193,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
         /* Out of Order Data Packet Handling */
       else if (ntohl(pkt->seqno) > r->my_ackno)
         {
-          fprintf(stderr, "pkt->seqno > r->my_ackno so will be buffered \n");
-          fprintf(stderr, "pkt->seqno: %d r->my_ackno: %d\n", ntohl(pkt->seqno), r->my_ackno);
+          //fprintf(stderr, "pkt->seqno > r->my_ackno so will be buffered \n");
+          //fprintf(stderr, "pkt->seqno: %d r->my_ackno: %d\n", ntohl(pkt->seqno), r->my_ackno);
           /* add packet to buffer */
         if((ntohl(pkt->seqno) - r->my_ackno) <= r->window_size)     //packet is ahead of my_ackno, but w/i receive window
           {
@@ -215,6 +215,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
             ackPacket->ackno = htonl(r->my_ackno);
             ackPacket->cksum = cksum(ackPacket, 8);
             conn_sendpkt (r->c, ackPacket, ackPacket->len);           //send DUPACK packet with my_ackno
+            //rel_output(r); - this causes a segfault
           }
 
         }
@@ -227,30 +228,30 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
       /* ACK Packet Handling */
       if (ntohs(pkt->len) == 8)
       {
-        fprintf(stderr, "Current ACK packet's seqno is %d\n", pkt->seqno);
+        //fprintf(stderr, "Current ACK packet's seqno is %d\n", pkt->seqno);
         if(ntohl(pkt->ackno) == r->last_seqno_sent + 1)
         {
           //delete the packet from the send buffer, as it has been acked
           r->snd_window_buffer[r->last_seqno_sent].has_been_ackd = 1;
           /* send next packets from send window buffer */
-          fprintf(stderr, "First if in ACK Packet Handling in rel_recvpkt. Current value of r->last_seqno_sent is: %d\n", r->last_seqno_sent);
+          //fprintf(stderr, "First if in ACK Packet Handling in rel_recvpkt. Current value of r->last_seqno_sent is: %d\n", r->last_seqno_sent);
           //rel_read(r); - this call was actually screwing things up, i think it's unnecessary
           return;
         }
 
         if(ntohl(pkt->ackno) < r->last_seqno_sent + 1)
         {
-          fprintf(stderr, "Second if in ACK Packet Handling in rel_recvpkt. Current value of r->last_seqno_sent is: %d\n", r->last_seqno_sent);
+          //fprintf(stderr, "Second if in ACK Packet Handling in rel_recvpkt. Current value of r->last_seqno_sent is: %d\n", r->last_seqno_sent);
           return;
           /* currently doing nothing and waiting for timeout to retransmit, not retransmitting the packet whose seqno == pkt->ackno */
         }
 
         if(ntohl(pkt->ackno) > r->last_seqno_sent + 1)
         {
-          fprintf(stderr, "Third if in ACK Packet Handling in rel_recvpkt. Current value of r->last_seqno_sent is: %d\n", r->last_seqno_sent);
+          //fprintf(stderr, "Third if in ACK Packet Handling in rel_recvpkt. Current value of r->last_seqno_sent is: %d\n", r->last_seqno_sent);
           return;                                                     //bad ACKNO, reject packet
         }
-        fprintf(stderr, "End of ACK Packet Handling in rel_recvpkt. Current value of r->last_seqno_sent is: %d\n", r->last_seqno_sent);
+        //fprintf(stderr, "End of ACK Packet Handling in rel_recvpkt. Current value of r->last_seqno_sent is: %d\n", r->last_seqno_sent);
       }
 
       /* EOF Packet Handling */
@@ -324,7 +325,7 @@ rel_read (rel_t *s)                                                             
   packet_to_send->packet.cksum = cksum(&packet_to_send->packet, ntohs(packet_to_send->packet.len));
 
   packet_to_send->time_sent = global_timer;
-  fprintf(stderr, "Packet to be sent has packet number %d\n", ntohl(packet_to_send->packet.seqno));
+  //fprintf(stderr, "Packet to be sent has packet number %d\n", ntohl(packet_to_send->packet.seqno));
   conn_sendpkt(s->c, &packet_to_send->packet, packet_to_send->packet.len);
  
 }
@@ -344,12 +345,13 @@ rel_output (rel_t *r)
   {
     i++;
   }
+  /*
   if (ntohl(r->rcv_window_buffer[i-1].packet.seqno) < r->my_ackno + 1)
   {
     return;
-  }
-  else
-  {
+  } */
+  //else
+  //{
     int j;
     for (j = r->my_ackno + 1; j <= r->my_ackno + r->window_size; j++)
     {
@@ -358,7 +360,7 @@ rel_output (rel_t *r)
       size_t second_output_len = ntohs(r->rcv_window_buffer[j].packet.len - htons(12));
       conn_output(r->c, second_ptr, second_output_len);
     }
-  }
+  //}
 
   /* call conn_output, make sure you're not trying to call conn_output for more than the value conn_bufspace returns */
   /* when r->rcvd_EOF == 1, send an EOF to output by calling conn_output with a len of 0 */
