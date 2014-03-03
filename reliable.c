@@ -322,7 +322,19 @@ s->last_seqno_sent += 1;
   // If conn_input returns -1, EOF; destroy
   if (input == -1) {
     //fprintf(stderr, "%s\n", "EOF destroy");
-    rel_destroy(s);
+    int step = 0;
+    int x;
+
+    for (x = 0; x < new_seqno; x++) {
+      if(s->snd_window_buffer[x].has_been_ackd == 0) {
+        step = 1;
+        break;
+      }
+    }
+
+    if (step == 0) {
+      rel_destroy(s);
+    }
   }
 
   // If no data lies in buffer to be sent, return
