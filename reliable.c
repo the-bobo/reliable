@@ -164,7 +164,14 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
         //if pkt->seqno is outside of receiver window then drop.
         if (ntohl(pkt->seqno) < r->my_ackno)
         {
-          //fprintf(stderr, "Packet dropped: pkt->seqno < r->my_ackno\n Current pkt->seqno is: %d Current r->my_ackno is: %d\n", ntohl(pkt->seqno), r->my_ackno);
+          //Possibly my_ackno never reached the other end, send DUPACK
+
+          packet_t *newAckPacket = malloc(sizeof (struct packet));       //uses a "packet_t" type defined in rlib.c line 446
+          newAckPacket->len = htons(8);
+          newAckPacket->ackno = htonl(r->my_ackno);
+          newAckPacket->cksum = cksum(newAckPacket, 8);
+          conn_sendpkt (r->c, newAckPacket, newAckPacket->len);
+
           return;                                                           //drops packet, does not send ack
         }
 
@@ -295,23 +302,27 @@ void
 rel_read (rel_t *s)                                                                   //this is actually rel_send
 {
 
-  s->last_seqno_sent += 1;
+s->last_seqno_sent += 1;
   int new_seqno = s -> last_seqno_sent;
 
-  struct rich_packet *packet_to_send; 
+  struct rich_packet *packet_to_send;
   packet_to_send = malloc(sizeof(struct rich_packet));
 
   // Initialize a new packet_t within rich_packet
   packet_to_send->packet.seqno = htonl(new_seqno);
   packet_to_send->packet.ackno = htonl(s->my_ackno);
-  packet_to_send->packet.cksum = 0; 
+  packet_to_send->packet.cksum = 0;
 
-  int input = conn_input(s->c, packet_to_send->packet.data, 500);
+  // Get 499 bytes of user input - not 500; network pads packets
+  int input = conn_input(s->c, packet_to_send->packet.data, 499);
+
+  // Last packet touched is the one we just created
+  s->lastPacketTouched = &packet_to_send->packet;
 
   // If conn_input returns -1, EOF; destroy
   if (input == -1) {
     //fprintf(stderr, "%s\n", "EOF destroy");
-    //rel_destroy();
+    rel_destroy(s);
   }
 
   // If no data lies in buffer to be sent, return
@@ -321,10 +332,10 @@ rel_read (rel_t *s)                                                             
   }
 
   // If the amount drained from conn_input is > window size, return
-  if (input > s->window_size * sizeof(packet_t)) {
-    fprintf(stderr, "%d\n", input);
+  // Deprecated
+  /*if (input > s->window_size * sizeof(packet_t)) {
     return;
-  }
+  }*/
 
   else {
     packet_to_send->packet.len = htons(input + 12);
@@ -332,10 +343,24 @@ rel_read (rel_t *s)                                                             
 
   packet_to_send->packet.cksum = cksum(&packet_to_send->packet, ntohs(packet_to_send->packet.len));
 
-  packet_to_send->time_sent = global_timer;
-  //fprintf(stderr, "Packet to be sent has packet number %d\n", ntohl(packet_to_send->packet.seqno));
-  conn_sendpkt(s->c, &packet_to_send->packet, packet_to_send->packet.len);
+  packet_to_send->time_sent = global_timer; 
+
+  // Invariant: (LAR - LSS) <= SWS
+  if ((s->lastPacketTouched->ackno - s->last_seqno_sent) > s->window_size) {
+    conn_sendpkt(s->c, &packet_to_send->packet, packet_to_send->packet.len);
+  }
+
+  s->snd_window_buffer[new_seqno] = *packet_to_send;
  
+  // DEBUGGING STATEMENTS
+  /*fprintf(stderr, "\n%s\n", "snd_window_buffer:");
+
+  int j;
+  for (j = 0; j < new_seqno+1; j++) {
+    fprintf(stderr, "j=%d\n", j);
+    fprintf(stderr, "%s", s->snd_window_buffer[j].packet.data);
+  } */
+
 }
 
 void
@@ -392,7 +417,20 @@ rel_timer ()
 {
   global_timer++;
 
-  /* Retransmit any packets that need to be retransmitted */
-  /* Should keep track of received ACKs and outstanding ACKs, retransmit
-  as needed, and throttle send rate to match available window space */
+  int index;
+
+  /* Every five increments is one retransmission period  */
+  if (global_timer % 5 == 0) {
+
+    // Iterate through all "sent" packets in snd_window_buffer
+    for(index = 1; index <= rel_list->last_seqno_sent; index++) {
+     
+      // If a packet has yet to be acked...
+      if (rel_list->snd_window_buffer[index].has_been_ackd == 0) {
+
+        // Re-transmit it
+        conn_sendpkt(rel_list->c, &rel_list->snd_window_buffer[index].packet, rel_list->snd_window_buffer[index].packet.len);
+      }
+    }
+  }
 }
