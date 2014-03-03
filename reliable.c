@@ -67,6 +67,11 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
   //r->snd_window_buffer[r->window_size];                               //hardcoded above in reliable_struct to 1000 worth of packets
   r->rcvd_EOF = 0;
 
+  int i;
+  for (i = 0; i < r->window_size; i++)
+  {
+    r->rcv_window_buffer[i].is_full = 0;
+  }
 
   if (!c) {                                                             //if our connection object "c" does not exist, create it
     c = conn_create (r, ss);
@@ -176,13 +181,16 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)                       //size_t n
         {
           //fprintf(stderr, "Packet passed to rel output: pkt->seqno == r->my_ackno\n");
           //fprintf(stderr, "pkt->seqno: %d r->my_ackno: %d\n", htonl(pkt->seqno), r->my_ackno);
+ 
+          /* Moved to rel_output 
           r->my_ackno++;
-          /* Construct ACK packet */
+          // Construct ACK packet 
           packet_t *ackPacket = malloc(sizeof (struct packet));       //uses a "packet_t" type defined in rlib.c line 446
           ackPacket->len = htons(8);
           ackPacket->ackno = htonl(r->my_ackno);
           ackPacket->cksum = cksum(ackPacket, 8);
           conn_sendpkt (r->c, ackPacket, ackPacket->len);             //send ACK packet with my_ackno
+          */
 
           /* Pass to rel_output */
           pkt->cksum = to_be_compared_cksum;
@@ -333,18 +341,21 @@ rel_read (rel_t *s)                                                             
 void
 rel_output (rel_t *r)
 {
-
+  //fprintf(stderr, "Calling rel_output");
   /* In Order Packet Printing - Prints my_ackno */
   void *ptr = r->lastPacketTouched->data;
   size_t output_len = ntohs(r->lastPacketTouched->len - htons(12));
   conn_output(r->c, ptr, output_len);
 
   /* Out of Order Packet Printing */
-  int i = r->my_ackno % r->window_size + 1;
-  while(r->rcv_window_buffer[i].is_full == 1)
+  
+  int i = (r->my_ackno + 1) % r->window_size;
+  while(r->rcv_window_buffer[i].is_full == 1 && i <= r->window_size - 1)
   {
     i++;
   }
+  //fprintf(stderr, "with value of i: %d\n", i);
+  int counter = 0;
   /*
   if (ntohl(r->rcv_window_buffer[i-1].packet.seqno) < r->my_ackno + 1)
   {
@@ -352,14 +363,24 @@ rel_output (rel_t *r)
   } */
   //else
   //{
+    int start = (r->my_ackno + 1) % r->window_size;
     int j;
-    for (j = r->my_ackno + 1; j <= r->my_ackno + r->window_size; j++)
+    for (j = start; j < i; j++)
     {
-      r->rcv_window_buffer[j].is_full = 0;
-      void *second_ptr = r->rcv_window_buffer[j].packet.data;
-      size_t second_output_len = ntohs(r->rcv_window_buffer[j].packet.len - htons(12));
+      //fprintf(stderr, "At array value: %d the seqno is: %d\n", j%r->window_size, ntohl(r->rcv_window_buffer[j%r->window_size].packet.seqno));
+      r->rcv_window_buffer[j % r->window_size].is_full = 0;
+      void *second_ptr = r->rcv_window_buffer[j % r->window_size].packet.data;
+      size_t second_output_len = ntohs(r->rcv_window_buffer[j % r->window_size].packet.len - htons(12));
       conn_output(r->c, second_ptr, second_output_len);
+      counter++;
     }
+    //fprintf(stderr, "Current value of counter is: %d\n", counter);
+    r->my_ackno = r->my_ackno + counter + 1;
+    packet_t *newAckPacket = malloc(sizeof (struct packet));       //uses a "packet_t" type defined in rlib.c line 446
+    newAckPacket->len = htons(8);
+    newAckPacket->ackno = htonl(r->my_ackno);
+    newAckPacket->cksum = cksum(newAckPacket, 8);
+    conn_sendpkt (r->c, newAckPacket, newAckPacket->len);
   //}
 
   /* call conn_output, make sure you're not trying to call conn_output for more than the value conn_bufspace returns */
